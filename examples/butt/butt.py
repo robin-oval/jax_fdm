@@ -16,6 +16,8 @@ from jax_fdm.equilibrium import constrained_fdm
 from jax_fdm.optimization import LBFGSB
 from jax_fdm.optimization import OptimizationRecorder
 
+from jax_fdm.parameters import EdgeForceDensityParameter
+
 from jax_fdm.goals import NodePointGoal
 
 from jax_fdm.losses import RootMeanSquaredError
@@ -40,7 +42,7 @@ optimizer = LBFGSB  # the optimization algorithm
 maxiter = 1000  # optimizer maximum iterations
 tol = 1e-6  # optimizer tolerance
 
-record = False  # True to record optimization history of force densities
+record = True  # True to record optimization history of force densities
 export = False  # export result to JSON
 
 # ==========================================================================
@@ -63,8 +65,8 @@ network_target = FDNetwork.from_json(FILE_IN)
 # ==========================================================================
 
 # data
-supports = [node for node in network.nodes() if network.is_leaf(node)]
-network.nodes_supports(supports)
+anchors = [node for node in network.nodes() if network.is_leaf(node)]
+network.nodes_anchors(anchors)
 network.nodes_loads([px, py, pz], keys=network.nodes_free())
 network.edges_forcedensities(q=q0)
 
@@ -73,9 +75,18 @@ network.edges_forcedensities(q=q0)
 # ==========================================================================
 
 if export:
-    FILE_OUT = os.path.join(HERE, f"../data/../json/{name}_base.json")
+    FILE_OUT = os.path.join(HERE, f"../../data/json/{name}_base.json")
     network.to_json(FILE_OUT)
     print("Problem definition exported to", FILE_OUT)
+
+# ==========================================================================
+# Define optimization parameters
+# ==========================================================================
+
+parameters = []
+for edge in network.edges():
+    parameter = EdgeForceDensityParameter(edge, qmin, qmax)
+    parameters.append(parameter)
 
 # ==========================================================================
 # Define goals
@@ -84,7 +95,7 @@ if export:
 # edge lengths
 goals = []
 for node in network.nodes():
-    if node in supports:
+    if node in anchors:
         continue
     xyz = network_target.node_coordinates(node)
     goal = NodePointGoal(node, xyz)
@@ -111,14 +122,13 @@ print(f"Load path: {round(network.loadpath(), 3)}")
 # Solve constrained form-finding problem
 # ==========================================================================
 
-recorder = None
-if record:
-    recorder = OptimizationRecorder()
+optimizer = optimizer()
+recorder = OptimizationRecorder(optimizer) if record else None
 
 network = constrained_fdm(network0,
-                          optimizer=optimizer(),
+                          optimizer=optimizer,
                           loss=loss,
-                          bounds=(qmin, qmax),
+                          parameters=parameters,
                           maxiter=maxiter,
                           tol=tol,
                           callback=recorder)
@@ -182,7 +192,7 @@ viewer.view.camera.rotation[2] = 0.0  # set rotation around z axis to zero
 viewer.add(network,
            edgewidth=(0.1, 0.3),
            edgecolor="fd",
-           loadscale=2.0)
+           loadscale=5.0)
 
 # reference network
 viewer.add(network_target,

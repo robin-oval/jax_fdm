@@ -1,49 +1,63 @@
-import jax.numpy as jnp
+import numpy as np
 
-from jax_fdm.equilibrium.model import EquilibriumModel
+from jax_fdm import DTYPE_NP
+
+from jax_fdm.equilibrium import EquilibriumModel
 
 
 # ==========================================================================
 # Form-finding
 # ==========================================================================
 
-def _fdm(network, q):
+def _fdm(network, q, xyz_fixed, loads):
     """
     Compute a network in a state of static equilibrium using the force density method.
     """
-    # compute static equilibrium
     model = EquilibriumModel(network)
-    eq_state = model(q)
 
-    # update equilibrium state in network copy
-    return network_updated(network, eq_state)  # Network.update(eqstate)
+    # compute static equilibrium
+    eq_state = model(q, xyz_fixed, loads)
+
+    # update equilibrium state in a copy of the network
+    return network_updated(network, eq_state)
 
 
 def fdm(network):
     """
     Compute a network in a state of static equilibrium using the force density method.
     """
-    # get parameters
-    q = jnp.asarray(network.edges_forcedensities(), dtype=jnp.float64)
+    params = (np.array(p, dtype=DTYPE_NP) for p in network.parameters())
 
-    return _fdm(network, q)
+    return _fdm(network, *params)
+
 
 # ==========================================================================
 # Constrained form-finding
 # ==========================================================================
 
+def constrained_fdm(network,
+                    optimizer,
+                    loss,
+                    parameters=None,
+                    constraints=None,
+                    maxiter=100,
+                    tol=1e-6,
+                    callback=None):
+    """
+    Generate a network in a constrained state of static equilibrium using the force density method.
+    """
+    model = EquilibriumModel(network)
 
-def constrained_fdm(network, optimizer, loss, bounds=(None, None), constraints=[], maxiter=100, tol=1e-6, callback=None):
+    opt_problem = optimizer.problem(model, loss, parameters, constraints, maxiter, tol, callback)
+    opt_params = optimizer.solve(opt_problem)
+    q, xyz_fixed, loads = optimizer.parameters_fdm(opt_params)
 
-    # optimizer works
-    q_opt = optimizer.minimize(network, loss, bounds, constraints, maxiter, tol, callback=callback)
+    return _fdm(network, q, xyz_fixed, loads)
 
-    return _fdm(network, q_opt)
 
 # ==========================================================================
 # Helpers
 # ==========================================================================
-
 
 def network_updated(network, eq_state):
     """
@@ -67,6 +81,7 @@ def network_update(network, eq_state):
     residuals = eq_state.residuals.tolist()
     forces = eq_state.forces.tolist()
     forcedensities = eq_state.force_densities.tolist()
+    loads = eq_state.loads.tolist()
 
     # update q values and lengths on edges
     for idx, edge in network.index_uv().items():
@@ -80,4 +95,7 @@ def network_update(network, eq_state):
             network.node_attribute(node, name=name, value=value)
 
         for name, value in zip(["rx", "ry", "rz"], residuals[idx]):
+            network.node_attribute(node, name=name, value=value)
+
+        for name, value in zip(["px", "py", "pz"], loads[idx]):
             network.node_attribute(node, name=name, value=value)

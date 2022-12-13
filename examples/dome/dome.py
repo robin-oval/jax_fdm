@@ -31,8 +31,9 @@ from jax_fdm.losses import SquaredError
 from jax_fdm.losses import Loss
 
 from jax_fdm.optimization import LBFGSB
-
 from jax_fdm.optimization import OptimizationRecorder
+
+from jax_fdm.parameters import EdgeForceDensityParameter
 
 from jax_fdm.visualization import LossPlotter
 from jax_fdm.visualization import Viewer
@@ -54,15 +55,12 @@ offset_distance = 0.01  # ring offset
 q0_ring = -2.0  # starting force density for ring (hoop) edges
 q0_cross = -0.5  # starting force density for the edges transversal to the rings
 pz = -0.1  # z component of the applied load
+qmin, qmax = None, None
 
 # optimization
 optimizer = LBFGSB
 maxiter = 10000
 tol = 1e-6  # 1e-6 for best results at the cost of a considerable speed decrease
-
-# parameter bounds
-qmin = None  # -200.0
-qmax = None  # -0.001
 
 # goal length
 length_target = 0.03
@@ -73,8 +71,8 @@ angle_base = 20.0  # angle constraint, lower bound
 angle_top = 30.0  # angle constraint, upper bound
 
 # io
+record = True
 export = False
-record = False
 
 HERE = os.path.dirname(__file__)
 
@@ -126,11 +124,11 @@ for rings_pair in pairwise(rings):
 # Define structural system
 # ==========================================================================
 
-# define supports
+# define anchors
 for node in rings[0]:
-    network.node_support(node)
+    network.node_anchor(node)
 
-# apply loads to unsupported nodes
+# apply loads to unanchored nodes
 for node in network.nodes_free():
     network.node_load(node, load=[0.0, 0.0, pz])
 
@@ -154,6 +152,15 @@ if export:
     FILE_OUT = os.path.join(HERE, f"../data/json/{name}_base.json")
     network.to_json(FILE_OUT)
     print("Problem definition exported to", FILE_OUT)
+
+# ==========================================================================
+# Define parameters
+# ==========================================================================
+
+parameters = []
+for edge in network.edges():
+    parameter = EdgeForceDensityParameter(edge, qmin, qmax)
+    parameters.append(parameter)
 
 # ==========================================================================
 # Create goals
@@ -225,13 +232,13 @@ for config in sweep_configs:
     if fofin_method == fdm:
         network = fofin_method(network)
     else:
-        recorder = None
-        if config.get("record"):
-            recorder = OptimizationRecorder()
+        optimizer = optimizer()
+
+        recorder = OptimizationRecorder(optimizer) if config.get("record") else None
 
         network = fofin_method(network,
-                               optimizer=optimizer(),
-                               bounds=(qmin, qmax),
+                               optimizer=optimizer,
+                               parameters=parameters,
                                loss=loss,
                                constraints=config.get("constraints", []),
                                maxiter=maxiter,

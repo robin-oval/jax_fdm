@@ -1,6 +1,6 @@
 from jax_fdm.goals import VectorGoal
 
-from jax_fdm.goals.nodegoal import NodeGoal
+from jax_fdm.goals.node import NodeGoal
 
 
 class NodePointGoal(VectorGoal, NodeGoal):

@@ -26,8 +26,8 @@ from jax_fdm.goals import NodeLineGoal
 from jax_fdm.goals import NetworkLoadPathGoal
 
 from jax_fdm.constraints import NodeCurvatureConstraint
-from jax_fdm.constraints import NetworkEdgesLengthConstraint
-from jax_fdm.constraints import NetworkEdgesForceConstraint
+from jax_fdm.constraints import EdgeLengthConstraint
+from jax_fdm.constraints import EdgeForceConstraint
 
 from jax_fdm.losses import SquaredError
 from jax_fdm.losses import Loss
@@ -56,10 +56,6 @@ pz = -100.0  # z component of the total applied load
 optimizer = SLSQP
 maxiter = 1000
 tol = 1e-3
-
-# parameter bounds
-qmin = None
-qmax = None
 
 # goal horizontal projection
 add_horizontal_projection_goal = True
@@ -111,10 +107,10 @@ network = FDNetwork.from_nodes_and_edges(vertices, mesh.edges())
 # Define structural system
 # ==========================================================================
 
-# define supports
+# define anchors
 for key in network.nodes():
     if mesh.is_vertex_on_boundary(key):
-        network.node_support(key)
+        network.node_anchor(key)
 
 # set initial q to all edges
 for edge in network.edges():
@@ -180,17 +176,22 @@ if add_edge_length_constraint:
     average_length = np.mean([network.edge_length(*edge) for edge in network.edges()])
     length_min = ratio_length_min * average_length
     length_max = ratio_length_max * average_length
-    constraint = NetworkEdgesLengthConstraint(bound_low=length_min,
-                                              bound_up=length_max)
-    constraints.append(constraint)
+
+    for edge in network.edges():
+        constraint = EdgeLengthConstraint(edge,
+                                          bound_low=length_min,
+                                          bound_up=length_max)
+        constraints.append(constraint)
 
     msg = "Edge length constraint between {} and {}"
     print(msg.format(round(length_min, 2), round(length_max, 2)))
 
 if add_edge_force_constraint:
-    constraint = NetworkEdgesForceConstraint(bound_low=force_min,
-                                             bound_up=force_max)
-    constraints.append(constraint)
+    for edge in network.edges():
+        constraint = EdgeForceConstraint(edge,
+                                         bound_low=force_min,
+                                         bound_up=force_max)
+        constraints.append(constraint)
 
     msg = "Edge force constraint between {} and {}"
     print(msg.format(round(force_min, 2), round(force_max, 2)))
@@ -227,13 +228,11 @@ networks["free"] = fdm(network)
 
 networks["uncstr_opt"] = constrained_fdm(network,
                                          optimizer=optimizer(),
-                                         bounds=(qmin, qmax),
                                          loss=loss,
                                          maxiter=maxiter)
 
 networks["cstr_opt"] = constrained_fdm(network,
                                        optimizer=optimizer(),
-                                       bounds=(qmin, qmax),
                                        loss=loss,
                                        constraints=constraints,
                                        maxiter=maxiter)
@@ -273,7 +272,7 @@ viewer.add(network0,
            as_wireframe=True,
            show_points=False,
            linewidth=1.0,
-           color=Color.grey().darkened(i * 10))
+           color=Color.grey().darkened(10))
 
 # optimized network
 viewer.add(c_network,

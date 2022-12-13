@@ -14,6 +14,92 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 
 
+## [0.4.2] 2022-12-12
+
+### Added
+
+- Implemented `NodeTangentAngleGoal`.
+- Implemented `NodeNormalAngleGoal`.
+- Implemented `NodeTangentAngleConstraint`.
+- Implemented `NodeNormalAngleConstraint`.
+- Added `EquilibriumStructure.connectivity_faces` to optimize for face-related quantities in an `FDNetwork`.
+
+### Changed
+
+- Fixed bug in `edgewidth` sizing in `NetworkArtist` when all edges have the same force. 
+- Changed `angle_vectors` to return angle in radians by default.
+- Shifted loads start point in `plotters.NetworkArtist` for them to be incident to the nodes.
+
+### Removed
+
+
+## [0.4.1] 2022-11-29
+
+### Added
+
+### Changed
+
+- Changed generator unpacking `*sarrays` in `parameters.split` unsupported in Python 3.7. 
+- Changed tension-compression force color map gradient to a binary color map.
+
+### Removed
+
+
+## [0.4.0] 2022-11-22
+
+### Added
+
+- Added `goals.NodeZCoordinateGoal`.
+- Added `goals.NodeYCoordinateGoal`.
+- Added `goals.NodeXCoordinateGoal`.
+- Added `constraints.NodeZCoordinateConstraint`.
+- Added `constraints.NodeYCoordinateConstraint`.
+- Added `constraints.NodeXCoordinateConstraint`.
+- Added `IPOPT`, a second-order, constrained optimizer that wraps `cyipopt`, to the repertoire of optimizers.
+
+### Changed
+
+- Restructured `optimization.optimizers` into separate files.
+- Renamed `goals.edgegoal` submodule to `goals.edge`.
+- Renamed `goals.nodegoal` submodule to `goals.node`.
+- Renamed `goals.networkgoal` submodule to `goals.network`.
+- Enabled support for one-sided bounds in `constraint.Constraints`.
+- `NetworkLoadPathGoal` uses `jnp.multiply` instead of multipication operator `*`.
+- Broke down `Optimizer.minimize()` into `.problem()` and `.solve()`.
+- For efficiency, `SecondOrderOptimizer` calculates `hessian` as `jax.jacfwd(jax.jacrev)`.
+- Changed calculation of the scalar ouput of `Loss` using a compact loop. 
+- Changed calculation of the scalar ouput of `Error` using a compact loop. 
+
+### Removed
+
+
+## [0.3.0] 2022-11-08
+
+### Added
+- Implemented `jax_fdm.parameters` to choose optimization parameters a la carte!
+- Created `parameters.EdgeForceDensityParameter`.
+- Created `parameters.NodeAnchorXParameter`.
+- Created `parameters.NodeAnchorYParameter`.
+- Created `parameters.NodeAnchorZParameter`.
+- Created `parameters.NodeLoadXParameter`.
+- Created `parameters.NodeLoadYParameter`.
+- Created `parameters.NodeLoadZParameter`.
+- Implemented `EquilibriumStructure.nodes`.
+- Implemented `EquilibriumStructure.edges`.
+- Added `EquilibriumStructure.anchor_index`.
+- Implemented `ParameterManager.parameters_ordered` to fix order mismatch between optimization parameters and their bounds.
+
+### Changed
+
+- `EquilibriumModel.__call__` tasks `q`, `xyz_fixed` and `loads` as arguments.
+- `FDNetwork.transform` only modifies node coordinates.
+- `FDNetworkViewerArtist` shifts a node load by the maximum edge width at the node.
+- `OptimizationRecorder.history` stores `q`, `xyz_fixed` and `loads`. 
+- `LossPlotter.plot` supports `q`, `xyz_fixed` and `loads` to be compatible with `OptimizationRecorder.history`.
+
+### Removed
+
+
 ## [0.2.4] 2022-10-27
 
 ### Added

@@ -1,10 +1,6 @@
 from functools import partial
 
-import jax
-
 from jax import jit
-
-import jax.numpy as jnp
 
 from jax_fdm.losses import Error
 from jax_fdm.losses import Regularizer
@@ -26,16 +22,18 @@ class Loss:
         self.terms_regularization = args
         self.name = name or self.__class__.__name__
 
-    @partial(jit, static_argnums=(0, 2))
-    def __call__(self, q, model):
-        eqstate = model(q)
-        func = partial(self._term_val, eqstate=eqstate)
-        return jnp.sum(jnp.array(jax.tree_map(func, self.terms)))
+    @partial(jit, static_argnums=(0, 4))
+    def __call__(self, q, xyz_fixed, loads, model):
+        """
+        Compute the scalar output of the loss function.
+        """
+        eqstate = model(q, xyz_fixed, loads)
 
-    @staticmethod
-    @partial(jit, static_argnums=0)
-    def _term_val(term, eqstate):
-        return term(eqstate)
+        loss = 0.0
+        for error_term in self.terms:
+            loss = loss + error_term(eqstate)
+
+        return loss
 
     @property
     def terms_error(self):
@@ -70,7 +68,7 @@ class Loss:
         """
         The total number of individual goals for all error terms in the loss.
         """
-        return sum([term.number_of_goals() for term in self.terms_error])
+        return sum(term.number_of_goals() for term in self.terms_error)
 
     def number_of_regularizers(self):
         """
@@ -82,4 +80,4 @@ class Loss:
         """
         The total number of goal collections for all error terms in the loss.
         """
-        return sum([term.number_of_collections() for term in self.terms_error])
+        return sum(term.number_of_collections() for term in self.terms_error)

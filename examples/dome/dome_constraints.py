@@ -29,7 +29,9 @@ from jax_fdm.constraints import EdgeForceConstraint
 from jax_fdm.losses import SquaredError
 from jax_fdm.losses import Loss
 
-from jax_fdm.optimization import TrustRegionConstrained
+from jax_fdm.optimization import SLSQP
+
+from jax_fdm.parameters import EdgeForceDensityParameter
 
 from jax_fdm.visualization import Viewer
 
@@ -51,7 +53,7 @@ q0_cross = -0.5  # starting force density for the edges transversal to the rings
 pz = -0.1  # z component of the applied load
 
 # optimization
-optimizer = TrustRegionConstrained
+optimizer = SLSQP
 maxiter = 10000
 tol = 1e-3
 
@@ -136,11 +138,11 @@ for rings_pair in pairwise(rings):
 # Define structural system
 # ==========================================================================
 
-# define supports
+# define anchors
 for node in rings[0]:
-    network.node_support(node)
+    network.node_anchor(node)
 
-# apply loads to unsupported nodes
+# apply loads to unanchored nodes
 for node in network.nodes_free():
     network.node_load(node, load=[0.0, 0.0, pz])
 
@@ -156,6 +158,15 @@ for edge in edges_cross:
 # ==========================================================================
 
 networks = {"start": network}
+
+# ==========================================================================
+# Define optimization parameters
+# ==========================================================================
+
+parameters = []
+for edge in network.edges():
+    parameter = EdgeForceDensityParameter(edge, qmin, qmax)
+    parameters.append(parameter)
 
 # ==========================================================================
 # Create loss function with soft goals
@@ -256,7 +267,7 @@ for config in sweep_configs:
     else:
         network = fofin_method(network,
                                optimizer=optimizer(),
-                               bounds=(qmin, qmax),
+                               parameters=parameters,
                                loss=loss,
                                constraints=config.get("constraints", []),
                                maxiter=maxiter)
@@ -266,11 +277,11 @@ for config in sweep_configs:
         networks[config["name"]] = network
 
     extra_stats = None
-
     if constraint_angles:
         model = EquilibriumModel(network)
-        q = np.array(network.edges_forcedensities())
-        eqstate = model(q)
+        params = [np.array(param) for param in network.parameters()]
+        # q = np.array(network.edges_forcedensities())
+        eqstate = model(*params)
         a = [constraint.constraint(eqstate, constraint.index_from_model(model)).item() for constraint in constraint_angles]
         extra_stats = {"Angles": a}
 

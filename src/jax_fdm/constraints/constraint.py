@@ -1,24 +1,25 @@
-from functools import partial
-
 import numpy as np
-
-import jax.numpy as jnp
-
-from jax import jit
 
 from jax import vmap
 
+import jax.numpy as jnp
+
 
 class Constraint:
-    def __init__(self, key, bound_low, bound_up):
+    """
+    Base class for all constraints.
+    """
+    def __init__(self, key, bound_low=None, bound_up=None):
         self._key = None
-        self._bound_low = None
-        self._bound_up = None
-        self._index = None
-
         self.key = key
+
+        self._bound_low = None
         self.bound_low = bound_low
+
+        self._bound_up = None
         self.bound_up = bound_up
+
+        self._index = None
 
     @property
     def key(self):
@@ -44,6 +45,18 @@ class Constraint:
             index = [index]
         self._index = np.array(index)
 
+    @staticmethod
+    def _bound_setter(bound):
+        """
+        Set a bound.
+        """
+        if not isinstance(bound, (int, float)):
+            if len(bound) == 1:
+                bound = bound[0]
+            else:
+                bound = np.ravel(bound)
+        return bound
+
     @property
     def bound_low(self):
         """
@@ -53,13 +66,9 @@ class Constraint:
 
     @bound_low.setter
     def bound_low(self, bound):
-        if isinstance(bound, (int, float)):
-            bound = bound
-        elif len(bound) == 1:
-            bound = bound[0]
-        else:
-            bound = np.ravel(bound)
-        self._bound_low = bound
+        if bound is None:
+            bound = -jnp.inf
+        self._bound_low = self._bound_setter(bound)
 
     @property
     def bound_up(self):
@@ -70,20 +79,16 @@ class Constraint:
 
     @bound_up.setter
     def bound_up(self, bound):
-        if isinstance(bound, (int, float)):
-            bound = bound
-        elif len(bound) == 1:
-            bound = bound[0]
-        else:
-            bound = np.ravel(bound)
-        self._bound_up = bound
+        if bound is None:
+            bound = jnp.inf
+        self._bound_up = self._bound_setter(bound)
 
-    # def __call__(self, q, model):
-    #     """
-    #     The constraint function.
-    #     """
-    #     eqstate = model(q)
-    #     return self.constraint(eqstate, model)
+    @staticmethod
+    def index_from_model(model):
+        """
+        Get the index in the model of the constraint key.
+        """
+        raise NotImplementedError
 
     def init(self, model):
         """
@@ -91,14 +96,19 @@ class Constraint:
         """
         self.index = self.index_from_model(model)
 
-    @partial(jit, static_argnums=(0, 2))
-    def __call__(self, q, model):
+    def __call__(self, q, xyz_fixed, loads, model):
         """
-        The constraint function.
+        The called constraint function.
         """
-        eqstate = model(q)
+        eqstate = model(q, xyz_fixed, loads)
         constraint = vmap(self.constraint, in_axes=(None, 0))(eqstate, self.index)
+
+        # assert jnp.ravel(constraint).shape == jnp.ravel(self.index).shape, f"Constraint shape: {constraint.shape} vs. index shape: {self.index.shape}"
+
         return jnp.ravel(constraint)
 
     def constraint(self, eqstate, index):
+        """
+        The constraint function.
+        """
         raise NotImplementedError

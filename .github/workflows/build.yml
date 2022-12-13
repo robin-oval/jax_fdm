@@ -19,15 +19,14 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest]
-        python-version: ['3.8']
+        python-version: ['3.10']
 
     steps:
       - uses: actions/checkout@v2
 
-      - uses: conda-incubator/setup-miniconda@v2.0.0
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v2
         with:
-          miniconda-version: "latest"
-          channels: conda-forge
           python-version: ${{ matrix.python-version }}
 
       - uses: compas-dev/compas-actions.build@v1.1.1

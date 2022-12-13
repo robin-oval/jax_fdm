@@ -25,6 +25,8 @@ from jax_fdm.losses import SquaredError
 from jax_fdm.optimization import SLSQP
 from jax_fdm.optimization import OptimizationRecorder
 
+from jax_fdm.optimization import EdgeForceDensityParameter
+
 from jax_fdm.visualization import LossPlotter
 from jax_fdm.visualization import Viewer
 
@@ -100,12 +102,12 @@ for i in range(1, num_u - 1):
 # Define structural system
 # ==========================================================================
 
-# define supports
+# define anchors
 for arch in arches:
-    network.node_support(arch[0])
-    network.node_support(arch[-1])
+    network.node_anchor(arch[0])
+    network.node_anchor(arch[-1])
 
-# apply loads to unsupported nodes
+# apply loads to unanchored nodes
 for node in network.nodes_free():
     network.node_load(node, load=[0.0, 0.0, pz])
 
@@ -122,7 +124,7 @@ network_transform(network, T)
 # ==========================================================================
 
 if export:
-    FILE_OUT = os.path.join(HERE, f"../data/json/{name}_base.json")
+    FILE_OUT = os.path.join(HERE, f"../../data/json/{name}_base.json")
     network.to_json(FILE_OUT)
     print("Problem definition exported to", FILE_OUT)
 
@@ -139,6 +141,15 @@ for i in range(int(num_steps) + 1):
     rzs.append(rz_min + i * step_size)
 
 rzs = rzs + rzs[0:-1][::-1]
+
+# ==========================================================================
+# Define parameters
+# ==========================================================================
+
+parameters = []
+for edge in network.edges():
+    parameter = EdgeForceDensityParameter(edge, -5.0, -0.1)
+    parameters.append(parameter)
 
 # ==========================================================================
 # Define goals
@@ -178,14 +189,14 @@ loss = Loss(squared_error_a, squared_error_b, squared_error_c)
 # Solve constrained form-finding problem
 # ==========================================================================
 
-recorder = None
-if record:
-    recorder = OptimizationRecorder()
+optimizer = SLSQP()
+
+recorder = OptimizationRecorder(optimizer) if record else None
 
 c_network = constrained_fdm(network,
-                            optimizer=SLSQP(),
+                            optimizer=optimizer,
                             loss=loss,
-                            bounds=(-5.0, -0.1),
+                            parameters=parameters,
                             maxiter=200,
                             tol=1e-9,
                             callback=recorder)
@@ -195,7 +206,7 @@ c_network = constrained_fdm(network,
 # ==========================================================================
 
 if export:
-    FILE_OUT = os.path.join(HERE, f"../data/json/{name}_optimized.json")
+    FILE_OUT = os.path.join(HERE, f"../../data/json/{name}_optimized.json")
     c_network.to_json(FILE_OUT)
     print("Form found design exported to", FILE_OUT)
 
@@ -204,7 +215,7 @@ if export:
 # ==========================================================================
 
 if record and export:
-    FILE_OUT = os.path.join(HERE, f"../data/json/{name}_history.json")
+    FILE_OUT = os.path.join(HERE, f"../../data/json/{name}_history.json")
     recorder.to_json(FILE_OUT)
     print("Optimization history exported to", FILE_OUT)
 
